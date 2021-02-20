@@ -1,123 +1,107 @@
-import os
-import subprocess
-from multiprocessing import Pool
+#!python3
+#
 from pathlib import Path
-from typing import List, Optional, Any
+from typing import Optional
+
 import meshio
-from gladia.plotter.shape import plot_mesh, plot_meshes
-import dotenv
-import shutil
-import tempfile
-import uuid
+from gladia.plotter.shape import plot_mesh
+
+from src.converter import DatasetConverter
+from src.transforms import ManifoldToObj, ManifoldFix, ManifoldSimplify
+from src.utils import get_env
+import typer
+import json
+from loguru import logger
 
 
-dotenv.load_dotenv(override=True)
-TMPDIR = Path(tempfile.gettempdir())
-
-source: Path = Path("data-raw/")
-target: Path = Path("data-fixed")
-
-shapes = sorted(source.rglob("*"))
-
-
-def get_env(env_name: str, default: Optional[Any] = None) -> str:
+def fix(
+    resolution: int = typer.Option(
+        5_000,
+        help="the number of leaf nodes of octree. The face number increases linearly with the resolution.",
+    ),
+    simplify: bool = typer.Option(
+        False, help="if True, tries to simplify the obtained manifold"
+    ),
+    manifold_check: bool = typer.Option(
+        True, help="Turn on manifold check, we don't output model if check fails"
+    ),
+    face_num: int = typer.Option(
+        5_000, help="Add termination condition when current_face_num <= face_num"
+    ),
+    max_cost: float = typer.Option(
+        1e-6, help="Add termination condition when quadric error >= max_cost"
+    ),
+    max_ratio: float = typer.Option(
+        0.40,
+        help="Add termination condition when current_face_num / origin_face_num <= max_ratio",
+    ),
+    workers: int = typer.Option(8, help="if True parallelize the transformation"),
+    parallel: bool = typer.Option(
+        True, help="the number of workers to use if parallel is enabled"
+    ),
+    source: str = typer.Option("data-raw", help="the source folder"),
+    target: str = typer.Option("data-fixed", help="the target folder"),
+    manifold_exec: Optional[str] = typer.Option(
+        None,
+        help="the manifold executable. If None uses the one define in .env or in the path",
+    ),
+    simplify_exec: Optional[str] = typer.Option(
+        None,
+        help="the simplify executable. If None uses the one define in .env or in the path",
+    ),
+) -> None:
     """
-    Read an environment variable.
-    Raises errors if it is not defined or empty.
+    Fix a 3D dataset recursively, copy-only does not change the source.
+    The meshes can be in any format, they will be converted in .obj
 
-    :param env_name: the name of the environment variable
-    :return: the value of the environment variable
+    It uses the Manifold tool: https://github.com/hjwdzh/Manifold
     """
-    if env_name not in os.environ:
-        if default:
-            return default
-        raise KeyError(f"{env_name} not defined")
-    env_value: str = os.environ[env_name]
-    if not env_value:
-        if default:
-            return default
-        raise KeyError(f"{env_name} has yet to be configured")
-    return env_value
+    args = {x: y for x, y in locals().items() if not x.startswith("__")}
 
+    logger.disable("src.transforms")
 
-def direct_copy(filepath: Path, target_path: Path):
-    if filepath.is_file():
-        shutil.copy(filepath, target_path)
+    with (Path(target) / "fixconfig.json").open(mode="w") as fp:
+        json.dump(args, fp, indent=4, sort_keys=True)
 
+    transforms = [
+        ManifoldToObj(),
+        ManifoldFix(resolution=resolution, executable=manifold_exec),
+    ]
 
-def manifold_call(shape_path: Path, target_path: Path):
-    try:
-
-        subprocess.check_call(
-            [
-                get_env("manifold", default="manifold"),
-                str(shape_path),
-                str(target_path),
-            ],
-            stdout=subprocess.DEVNULL,
-            # stderr=subprocess.DEVNULL,
+    if simplify:
+        transforms.append(
+            ManifoldSimplify(
+                manifold_check=manifold_check,
+                face_num=face_num,
+                max_cost=max_cost,
+                max_ratio=max_ratio,
+                executable=simplify_exec,
+            )
         )
-    except Exception as e:
-        print(f"Error manifold: {shape_path} -> {target_path}")
 
-
-def convert_and_fix(shape_path: Path, target_path: Path):
-    temp_path = TMPDIR / f"{str(uuid.uuid4())}.obj"
-    meshio.write(temp_path, meshio.read(shape_path), file_format="obj")
-    target_path = target_path.with_suffix(".obj")
-    shape_path = temp_path
-
-    manifold_call(shape_path, target_path)
-
-    temp_path.unlink()
-
-
-def fix_off_and_fix_shapes(shape_path: Path, target_path: Path):
-    text = shape_path.read_text()
-    if text[3] != "\n":
-        text = text[:3] + "\n" + text[3:]
-        temp_path = TMPDIR / f"{str(uuid.uuid4())}.off"
-        temp_path.write_text(text)
-        shape_path = temp_path
-
-        convert_and_fix(shape_path, target_path)
-
-        temp_path.unlink()
-    else:
-        convert_and_fix(shape_path, target_path)
-
-
-def fix_shapes(shape_path: Path, target_path: Path):
-    if shape_path.is_file():
-        if shape_path.suffix == ".off":
-            fix_off_and_fix_shapes(shape_path, target_path)
-        elif not shape_path.suffix == ".obj":
-            convert_and_fix(shape_path, target_path)
-        else:
-            manifold_call(shape_path, target_path)
-
-
-def convert_shape(shape_path: Path):
-    target_path = target / shape_path.relative_to(source)
-    if target_path.is_dir():
-        target_path.mkdir(parents=True, exist_ok=True)
-    else:
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        fix_shapes(shape_path, target_path)
-    except meshio._exceptions.ReadError:
-        print(f"Direct copy: {shape_path}")
-        direct_copy(shape_path, target_path)
+    DatasetConverter(
+        transforms=transforms,
+        source=source,
+        target=target,
+    ).transform_dataset(processes=workers, parallel=parallel)
 
 
 if __name__ == "__main__":
+    typer.run(fix)
+    #
+    # a = list(Path("data-fixed").rglob("*.obj"))
+    # import random
+    #
+    # random.shuffle(a)
+    #
+    # for x in a:
+    #     plot_mesh(x, autoshow=True)
+    #     print(meshio.read(x).points.shape)
+
+    import loguru
+    import sys
+
     # # start 4 worker processes
-    with Pool(processes=int(get_env("processes", default=8))) as pool:
-        # print "[0, 1, 4,..., 81]"
-        # print same numbers in arbitrary order
-        for x in pool.imap_unordered(convert_shape, shapes, chunksize=1000):
-            pass
 
     # for x in shapes:
     #     y = target / x.relative_to(source)

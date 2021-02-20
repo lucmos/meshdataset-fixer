@@ -7,6 +7,9 @@ authors = ["Luca Moschella <luca.moschella94@gmail.com>"]
 [tool.poetry.dependencies]
 python = "^3.8"
 python-dotenv = "^0.15.0"
+typer = "^0.3.2"
+loguru = "^0.5.3"
+rich = "^9.11.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
