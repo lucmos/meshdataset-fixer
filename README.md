@@ -1,3 +1,5 @@
+![](./docs/pics/teaser.png)
+
 ```
 Usage: fixdata.py [OPTIONS]
 
