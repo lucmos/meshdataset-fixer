@@ -40,7 +40,9 @@ class DatasetConverter:
             target_path.parent.mkdir(parents=True, exist_ok=True)
 
     def get_temp_path(self) -> Path:
-        return self.tmp_dir / f"{str(uuid.uuid4())}.obj"
+        p = self.tmp_dir / f"{str(uuid.uuid4())}.obj"
+        assert not p.exists()
+        return p
 
     def get_target_path(self, source_path: Path) -> Path:
         target_path = self.target / source_path.relative_to(self.source)
@@ -54,6 +56,8 @@ class DatasetConverter:
         all_temp_paths = []
         try:
             outpaths = [self.get_temp_path() for _ in range(len(self.transforms))]
+            all_temp_paths.extend(outpaths)
+
             for transform, outpath in zip(self.transforms, outpaths):
                 outpath, temp_paths = transform(shape_path, outpath)
                 shape_path = outpath
@@ -70,7 +74,7 @@ class DatasetConverter:
 
         finally:
             for x in all_temp_paths:
-                x.unlink()
+                x.unlink(missing_ok=True)
 
     def transform_dataset(self, processes: int = 8, parallel: bool = False) -> None:
         if parallel:

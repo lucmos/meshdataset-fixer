@@ -3,8 +3,8 @@
 ```
 Usage: fixdata.py [OPTIONS]
 
-  Fix a 3D dataset recursively, copy-only does not change the source. The
-  meshes can be in any format, they will be converted in .obj
+  Fix a 3D dataset recursively to enforce watertight manifolds, it is copy-
+  only. It does not change the source.
 
   It uses the Manifold tool: https://github.com/hjwdzh/Manifold
 
@@ -24,10 +24,10 @@ Options:
                                   current_face_num <= face_num  [default:
                                   5000]
 
-  --max-cost INTEGER              Add termination condition when quadric error
+  --max-cost FLOAT                Add termination condition when quadric error
                                   >= max_cost  [default: 1e-06]
 
-  --max-ratio INTEGER             Add termination condition when
+  --max-ratio FLOAT               Add termination condition when
                                   current_face_num / origin_face_num <=
                                   max_ratio  [default: 0.4]
 
@@ -35,7 +35,7 @@ Options:
                                   [default: 8]
 
   --parallel / --no-parallel      the number of workers to use if parallel is
-                                  enabled  [default: False]
+                                  enabled  [default: True]
 
   --source TEXT                   the source folder  [default: data-raw]
   --target TEXT                   the target folder  [default: data-fixed]
