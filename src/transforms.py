@@ -110,12 +110,24 @@ class ManifoldSimplify:
         )
 
 
-class ManifoldToObj:
+class ManifoldConvert:
+    def __init__(self, target_format: str = ".obj"):
+        if target_format and target_format[0] != ".":
+            raise ValueError(
+                f"The target format {target_format} is not a suffix! "
+                f"It should start with a dot."
+            )
+        self.target_format = target_format
+
     def convert_shape_format(
         self, source_path: Path, target_path: Path
     ) -> Tuple[Path, Sequence[Path]]:
-        target_path = target_path.with_suffix(".obj")
-        meshio.write(str(target_path), meshio.read(source_path), file_format="obj")
+        target_path = target_path.with_suffix(self.target_format)
+        meshio.write(
+            str(target_path),
+            meshio.read(source_path),
+            file_format=self.target_format[1:],
+        )
         logger.info(f"{source_path} -> {target_path}")
         return target_path, []
 

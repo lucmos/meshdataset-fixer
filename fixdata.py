@@ -7,7 +7,7 @@ import meshio
 from gladia.plotter.shape import plot_mesh
 
 from src.converter import DatasetConverter
-from src.transforms import ManifoldToObj, ManifoldFix, ManifoldSimplify
+from src.transforms import ManifoldConvert, ManifoldFix, ManifoldSimplify
 from src.utils import get_env
 import typer
 import json
@@ -51,8 +51,8 @@ def fix(
     ),
 ) -> None:
     """
-    Fix a 3D dataset recursively, copy-only does not change the source.
-    The meshes can be in any format, they will be converted in .obj
+    Fix a 3D dataset recursively to enforce watertight manifolds,
+    it is copy-only. It does not change the source.
 
     It uses the Manifold tool: https://github.com/hjwdzh/Manifold
     """
@@ -64,7 +64,7 @@ def fix(
         json.dump(args, fp, indent=4, sort_keys=True)
 
     transforms = [
-        ManifoldToObj(),
+        ManifoldConvert(target_format=".obj"),
         ManifoldFix(resolution=resolution, executable=manifold_exec),
     ]
 
@@ -89,13 +89,11 @@ def fix(
 if __name__ == "__main__":
     typer.run(fix)
     #
-    # a = list(Path("data-fixed").rglob("*.obj"))
-    # import random
-    #
-    # random.shuffle(a)
-    #
-    # for x in a:
+    # a = sorted(list(Path("data-raw").rglob("*.off")))
+    # b = sorted(list(Path("data-fixed").rglob("*.off")))
+    # for x, y in zip(a, b):
     #     plot_mesh(x, autoshow=True)
+    #     plot_mesh(y, autoshow=True)
     #     print(meshio.read(x).points.shape)
 
     import loguru
