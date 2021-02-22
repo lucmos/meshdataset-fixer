@@ -13,7 +13,8 @@ from loguru import logger
 
 
 def direct_copy(filepath: Path, target_path: Path):
-    if filepath.is_file():
+    if filepath and filepath.is_file():
+        logger.warning(f"Direct copy: {filepath} -> {target_path}")
         shutil.copy(filepath, target_path)
 
 
@@ -47,7 +48,7 @@ class ManifoldFix:
             return target_path, []
         except Exception as e:
             logger.error(f"Error manifold: {source_path} -> {target_path}")
-            return None, []
+            raise e
 
     def __repr__(self) -> str:
         return f"ManifoldFix(resolution={self.resolution})"
@@ -99,6 +100,7 @@ class ManifoldSimplify:
             return target_path, []
         except Exception as e:
             logger.error(f"Error simplify: {source_path} -> {target_path}")
+            raise e
 
     def __repr__(self) -> str:
         return (

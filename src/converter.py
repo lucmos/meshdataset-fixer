@@ -50,31 +50,31 @@ class DatasetConverter:
         return target_path
 
     def convert_shape(self, shape_path: Path):
-        manifold_convert = ManifoldConvert(target_format=shape_path.suffix)
+        if shape_path:
+            target_path = self.get_target_path(shape_path)
+            all_temp_paths = []
+            try:
+                manifold_convert = ManifoldConvert(target_format=shape_path.suffix)
 
-        target_path = self.get_target_path(shape_path)
-        all_temp_paths = []
-        try:
-            outpaths = [self.get_temp_path() for _ in range(len(self.transforms))]
-            all_temp_paths.extend(outpaths)
+                outpaths = [self.get_temp_path() for _ in range(len(self.transforms))]
+                all_temp_paths.extend(outpaths)
 
-            for transform, outpath in zip(self.transforms, outpaths):
-                outpath, temp_paths = transform(shape_path, outpath)
-                shape_path = outpath
+                for transform, outpath in zip(self.transforms, outpaths):
+                    outpath, temp_paths = transform(shape_path, outpath)
+                    shape_path = outpath
+                    all_temp_paths.extend(temp_paths)
+
+                _, temp_paths = manifold_convert(
+                    source_path=shape_path, target_path=target_path
+                )
                 all_temp_paths.extend(temp_paths)
 
-            _, temp_paths = manifold_convert(
-                source_path=shape_path, target_path=target_path
-            )
-            all_temp_paths.extend(temp_paths)
+            except Exception:
+                self.fallback(shape_path, target_path)
 
-        except meshio._exceptions.ReadError:
-            logger.warning(f"Direct copy: {shape_path}")
-            self.fallback(shape_path, target_path)
-
-        finally:
-            for x in all_temp_paths:
-                x.unlink(missing_ok=True)
+            finally:
+                for x in all_temp_paths:
+                    x.unlink(missing_ok=True)
 
     def transform_dataset(self, processes: int = 8, parallel: bool = False) -> None:
         if parallel:
